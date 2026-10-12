@@ -119,10 +119,35 @@ object LiquidGlass {
                     addRoundRect(bounds, radius, radius, Path.Direction.CW)
                 }
         val a = alpha.coerceIn(0f, 1f)
-        // A hairline, lit only where the curve faces the light (top-left) and catches its bounce
-        // (bottom-right), fading out along the straight sides, as iOS's glass edges are.
+        val key = RimKey(bounds.left, bounds.top, bounds.right, bounds.bottom, a)
+        val shaders = rimShaders.get(key) ?: newRimShaders(bounds, a).also { rimShaders.put(key, it) }
         rimPaint.strokeWidth = 1.4f * density
-        rimPaint.shader =
+        rimPaint.shader = shaders.rim
+        sheenPaint.shader = shaders.sheen
+        val count = canvas.save()
+        canvas.clipPath(path)
+        // Centred on the edge, so only the inner half of the stroke shows.
+        canvas.drawPath(path, rimPaint)
+        canvas.drawRect(bounds, sheenPaint)
+        canvas.restoreToCount(count)
+    }
+
+    private data class RimKey(
+        val left: Float,
+        val top: Float,
+        val right: Float,
+        val bottom: Float,
+        val alpha: Float,
+    )
+
+    private class RimShaders(val rim: Shader, val sheen: Shader)
+
+    private val rimShaders = android.util.LruCache<RimKey, RimShaders>(16)
+
+    private fun newRimShaders(bounds: RectF, a: Float) =
+        RimShaders(
+            // A hairline, lit only where the curve faces the light (top-left) and catches its
+            // bounce (bottom-right), fading out along the straight sides, as iOS's glass edges are.
             LinearGradient(
                 bounds.left,
                 bounds.top,
@@ -131,8 +156,7 @@ object LiquidGlass {
                 intArrayOf(white(0.55f * a), white(0.08f * a), 0, white(0.05f * a), white(0.30f * a)),
                 floatArrayOf(0f, 0.22f, 0.5f, 0.78f, 1f),
                 Shader.TileMode.CLAMP,
-            )
-        sheenPaint.shader =
+            ),
             LinearGradient(
                 0f,
                 bounds.top,
@@ -141,14 +165,8 @@ object LiquidGlass {
                 white(0.05f * a),
                 0,
                 Shader.TileMode.CLAMP,
-            )
-        val count = canvas.save()
-        canvas.clipPath(path)
-        // Centred on the edge, so only the inner half of the stroke shows.
-        canvas.drawPath(path, rimPaint)
-        canvas.drawRect(bounds, sheenPaint)
-        canvas.restoreToCount(count)
-    }
+            ),
+        )
 
     private fun white(alpha: Float) = (Math.round(alpha.coerceIn(0f, 1f) * 255f) shl 24) or 0xFFFFFF
 }
