@@ -66,6 +66,10 @@ constructor(
     private val workspaceBlurRenderNodeOutline = Outline()
     private val bounds = Rect()
     private val glassBounds = android.graphics.RectF()
+    private var workspaceEffect: RenderEffect? = null
+    private var workspaceEffectGlass = false
+    private val workspaceEffectBounds = android.graphics.RectF()
+    private var workspaceEffectRadius = 0f
     private val folderBlurDrawable: BackgroundBlurDrawable? by lazy {
         if (!isBlurEnabled()) null
         else
@@ -143,32 +147,51 @@ constructor(
         workspaceBlurRenderNode.setOutline(workspaceBlurRenderNodeOutline)
         workspaceBlurRenderNode.setClipToOutline(true)
 
-        val blur =
-            RenderEffect.createBlurEffect(folderBlurRadius, folderBlurRadius, Shader.TileMode.CLAMP)
-        workspaceBlurRenderNode.setRenderEffect(
-            if (LiquidGlass.isEnabled(context)) {
-                // The lens sits where the folder is, in the backdrop's own coordinates.
-                if (pathWrapper != null) {
-                    glassBounds.set(pathWrapper.bounds)
-                    glassBounds.offset(view.left.toFloat(), view.top.toFloat())
-                } else {
-                    glassBounds.set(
-                        view.left.toFloat(),
-                        view.top.toFloat(),
-                        view.right.toFloat(),
-                        view.bottom.toFloat(),
-                    )
-                }
-                LiquidGlass.lensEffect(
-                    blur,
-                    glassBounds,
-                    pathWrapper?.cornerRadius ?: cornerRadius,
-                    context.resources.displayMetrics.density,
-                )
+        val glass = LiquidGlass.isEnabled(context)
+        val lensRadius = pathWrapper?.cornerRadius ?: cornerRadius
+        if (glass) {
+            // The lens sits where the folder is, in the backdrop's own coordinates.
+            if (pathWrapper != null) {
+                glassBounds.set(pathWrapper.bounds)
+                glassBounds.offset(view.left.toFloat(), view.top.toFloat())
             } else {
-                blur
+                glassBounds.set(
+                    view.left.toFloat(),
+                    view.top.toFloat(),
+                    view.right.toFloat(),
+                    view.bottom.toFloat(),
+                )
             }
-        )
+        }
+        // A new effect has the whole backdrop blurred again, so one is only made when it differs.
+        if (
+            workspaceEffect == null ||
+                glass != workspaceEffectGlass ||
+                (glass &&
+                    (glassBounds != workspaceEffectBounds || lensRadius != workspaceEffectRadius))
+        ) {
+            val blur =
+                RenderEffect.createBlurEffect(
+                    folderBlurRadius,
+                    folderBlurRadius,
+                    Shader.TileMode.CLAMP,
+                )
+            workspaceEffect =
+                if (glass) {
+                    LiquidGlass.lensEffect(
+                        blur,
+                        glassBounds,
+                        lensRadius,
+                        context.resources.displayMetrics.density,
+                    )
+                } else {
+                    blur
+                }
+            workspaceEffectGlass = glass
+            workspaceEffectBounds.set(glassBounds)
+            workspaceEffectRadius = lensRadius
+        }
+        workspaceBlurRenderNode.setRenderEffect(workspaceEffect)
         canvas.drawRenderNode(workspaceBlurRenderNode)
     }
 
