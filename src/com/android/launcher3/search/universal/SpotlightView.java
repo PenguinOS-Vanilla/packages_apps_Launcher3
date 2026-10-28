@@ -179,22 +179,32 @@ public class SpotlightView extends AbstractFloatingView
 
     private void applyRevealProgress() {
         float t = mRevealProgress;
-        mPanel.setPivotX(mPanel.getWidth() / 2f);
-        mPanel.setPivotY(0f);
-        mPanel.setScaleX(0.96f + 0.04f * t);
-        mPanel.setScaleY(0.96f + 0.04f * t);
-        mPanel.setTranslationY(-dp(32) * (1f - t));
-        mPanel.setAlpha(t);
+        // Compositor glass does not follow an offscreen View-alpha layer's rectangular crop.
+        // Move intact rounded surfaces and fade their drawables directly instead.
+        mPanel.setScaleX(1f);
+        mPanel.setScaleY(1f);
+        mPanel.setAlpha(1f);
+        mPanel.setTranslationY(-Math.min(dp(24), Math.max(0, mPanel.getTop())) * (1f - t));
         mField.setAlpha(1f);
         mCard.setAlpha(1f);
-        mCard.setTranslationY(-dp(20) * (1f - t));
-        // Reveal from the top without stretching the text; recompute after IME relayouts.
-        int height = Math.round(mCard.getHeight() * t);
-        mCard.setClipBounds(t == 1f ? null
-                : new android.graphics.Rect(0, 0, mCard.getWidth(), height));
+        mCard.setTranslationY(0f);
+        mCard.setClipBounds(null);
+        int alpha = Math.round(255 * t);
+        setGlassAlpha(mPanel, alpha);
+        setGlassAlpha(mField, alpha);
+        setGlassAlpha(mCard, alpha);
+        ViewGroup field = (ViewGroup) mField;
+        for (int i = 0; i < field.getChildCount(); i++) field.getChildAt(i).setAlpha(t);
+        mResults.setAlpha(t);
+        ViewGroup content = findViewById(R.id.spotlight_content);
+        content.getChildAt(1).setAlpha(t);
         mScrim.setAlpha(t);
         if (mHomeBlur != null) mHomeBlur.setAlpha(t);
     }
+    private static void setGlassAlpha(View view, int alpha) {
+        if (view.getBackground() != null) view.getBackground().setAlpha(alpha);
+    }
+
     // The Dynamic Island the field grows out of and shrinks back into.
     private final RectF mIsland = new RectF();
     // The island at rest around the camera, which places the field.
@@ -823,7 +833,7 @@ public class SpotlightView extends AbstractFloatingView
 
     /**
      * Before anything is typed: four suggested apps, then a link on the clipboard and what's
-     * playing, then recent searches, as iOS arranges its Siri Suggestions.
+     * playing. Spotlight does not display search-history rows.
      */
     private List<Row> suggestions(List<AdapterItem> items) {
         List<AppInfo> apps = new ArrayList<>();
@@ -837,7 +847,7 @@ public class SpotlightView extends AbstractFloatingView
         }
         List<Row> rows = new ArrayList<>();
         if (!LauncherPrefs.SPOTLIGHT_SUGGESTIONS.get(getContext())) {
-            // Suggestions off: only what the user asked for (e.g. recent searches) remains.
+            // Suggestions off: keep only results supplied for this surface.
             rows.addAll(rows(rest));
             return rows;
         }
