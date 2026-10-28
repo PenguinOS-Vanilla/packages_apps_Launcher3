@@ -138,6 +138,13 @@ public class StashedHandleViewController implements TaskbarControllers.LoggableT
     private float mStartProgressForNextRevealAnim;
     private boolean mWasLastRevealAnimReversed;
 
+    // A reveal restores whichever outline it found when it started. When reveals overlap, or one
+    // starts and is never ended, that is another reveal's outline, frozen at the full taskbar
+    // size. Track the handle's own outline and the newest reveal so it can always be put back.
+    private ViewOutlineProvider mHandleOutlineProvider;
+    private @Nullable ValueAnimator mLatestRevealAnim;
+    private @Nullable RevealOutlineAnimation mLatestRevealProvider;
+
     // States that affect whether region sampling is enabled or not
     private boolean mIsStashed;
     private boolean mIsLumaSamplingEnabled;
@@ -257,7 +264,7 @@ public class StashedHandleViewController implements TaskbarControllers.LoggableT
         mTaskbarStashedHandleHintScale.updateValue(1f);
 
         final int stashedTaskbarHeight = mControllers.taskbarStashController.getStashedHeight();
-        mStashedHandleView.setOutlineProvider(new ViewOutlineProvider() {
+        mHandleOutlineProvider = new ViewOutlineProvider() {
             @Override
             public void getOutline(View view, Outline outline) {
                 TaskbarActivityContext activity = mActivityRef.get();
@@ -277,7 +284,8 @@ public class StashedHandleViewController implements TaskbarControllers.LoggableT
                         : view.getHeight() / 2f;
                 outline.setRoundRect(mStashedHandleBounds, mStashedHandleRadius);
             }
-        });
+        };
+        mStashedHandleView.setOutlineProvider(mHandleOutlineProvider);
 
         mStashedHandleView.addOnLayoutChangeListener((view, i, i1, i2, i3, i4, i5, i6, i7) -> {
             final int stashedCenterX = view.getWidth() / 2;
@@ -390,13 +398,35 @@ public class StashedHandleViewController implements TaskbarControllers.LoggableT
 
         ValueAnimator revealAnim = handleRevealProvider.createRevealAnimator(mStashedHandleView,
                 isReversed, mStartProgressForNextRevealAnim);
+        mLatestRevealAnim = revealAnim;
+        mLatestRevealProvider = handleRevealProvider;
         revealAnim.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
                 mStartProgressForNextRevealAnim = ((ValueAnimator) animation).getAnimatedFraction();
+                onRevealAnimEnded(animation);
             }
         });
         return revealAnim;
+    }
+
+    // Runs after the reveal's own end listener, which may have restored a stale outline.
+    private void onRevealAnimEnded(Animator animation) {
+        if (mHandleOutlineProvider == null) {
+            return;
+        }
+        if (animation != mLatestRevealAnim && mLatestRevealAnim != null
+                && mLatestRevealAnim.isStarted() && mLatestRevealProvider != null) {
+            mStashedHandleView.setOutlineProvider(mLatestRevealProvider);
+        } else {
+            if (animation == mLatestRevealAnim) {
+                mLatestRevealAnim = null;
+                mLatestRevealProvider = null;
+            }
+            mStashedHandleView.setOutlineProvider(mHandleOutlineProvider);
+            mStashedHandleView.setClipToOutline(true);
+        }
+        mStashedHandleView.invalidateOutline();
     }
 
     /** Called when taskbar is stashed or unstashed. */
