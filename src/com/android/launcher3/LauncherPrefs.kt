@@ -458,6 +458,7 @@ constructor(@ApplicationContext private val encryptedContext: Context) {
         @JvmField val SHOW_HOTSEAT_QSB = backedUpItem("pref_show_hotseat_qsb", true)
         @JvmField val UNIVERSAL_SEARCH = backedUpItem("pref_universal_search", true)
         @JvmField val UNIVERSAL_SEARCH_PLACE = backedUpItem("pref_universal_search_place", "home")
+        @JvmField val SWIPE_DOWN_SPOTLIGHT = backedUpItem("pref_swipe_down_spotlight", false)
 
         @JvmStatic
         fun isUniversalSearchOnHome(context: Context) =

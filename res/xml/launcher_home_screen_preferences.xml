@@ -139,6 +139,15 @@
         launcher:iconSpaceReserved="false" />
 
     <SwitchPreferenceCompat
+        android:key="pref_swipe_down_spotlight"
+        android:title="@string/swipe_down_spotlight_title"
+        android:summary="@string/swipe_down_spotlight_summary"
+        android:dependency="pref_universal_search"
+        android:defaultValue="false"
+        android:persistent="true"
+        launcher:iconSpaceReserved="false" />
+
+    <SwitchPreferenceCompat
         android:key="pref_dock_ai_music_search"
         android:title="@string/dock_ai_music_search_title"
         android:summary="@string/dock_ai_music_search_summary"

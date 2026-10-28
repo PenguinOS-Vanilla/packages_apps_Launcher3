@@ -3,6 +3,8 @@
     <string name="universal_search_title">Universal search</string>
     <string name="universal_search_summary">Search settings, contacts, files and more, not only apps</string>
     <string name="universal_search_place_title">Universal search location</string>
+    <string name="swipe_down_spotlight_title">Swipe down for search</string>
+    <string name="swipe_down_spotlight_summary">Swipe down on the home screen to open search. Swipe down from the top edge for notifications</string>
     <string-array name="universal_search_place_entries">
         <item>Home screen</item>
         <item>Launcher search</item>
