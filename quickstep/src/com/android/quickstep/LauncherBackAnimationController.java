@@ -680,7 +680,7 @@ public class LauncherBackAnimationController {
         // Keep the COS back preview's frosted background within the same blur budget as its
         // workspace reveal.
         return Math.min(radius, mLauncher.getResources().getDimensionPixelSize(
-                R.dimen.cos_tablet_content_blur_radius));
+                R.dimen.cos_content_blur_radius));
     }
 
     /**

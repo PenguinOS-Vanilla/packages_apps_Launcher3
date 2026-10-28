@@ -112,7 +112,6 @@ constructor(
     }
 
     private val cos = QuickstepTransitionManager.cosExperience(launcher)
-    private val cosTablet = cos && launcher.deviceProfile.deviceProperties.isLargeScreen
     private val duration = if (cos) COS_SCALE_DURATION_MS else SCALE_DURATION_MS
     private val animation = PendingAnimation(duration)
     private var blurLayer: SurfaceControl? = null
@@ -318,7 +317,7 @@ constructor(
         // Needed to avoid text artefacts during the scale animation.
         // RenderEffect already creates an offscreen layer. A second forced hardware layer
         // bounds its output and can cut off widgets/icons at the workspace edge during scale.
-        if (!cosTablet) {
+        if (!cos) {
             workspace.setLayerType(View.LAYER_TYPE_HARDWARE, null)
             hotseat.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         }
@@ -327,7 +326,7 @@ constructor(
                 override fun onAnimationCancel(animation: Animator) {
                     super.onAnimationCancel(animation)
                     cancelled = true
-                    if (cosTablet) Log.d(TAG, "onAnimationCancel", Throwable("reveal cancelled"))
+                    if (cos) Log.d(TAG, "onAnimationCancel", Throwable("reveal cancelled"))
                     else Log.d(TAG, "onAnimationCancel")
                 }
 
@@ -360,7 +359,7 @@ constructor(
                         )
                     }
 
-                    if (!cosTablet) {
+                    if (!cos) {
                         workspace.setLayerType(View.LAYER_TYPE_NONE, null)
                         hotseat.setLayerType(View.LAYER_TYPE_NONE, null)
                     }

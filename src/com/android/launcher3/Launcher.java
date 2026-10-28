@@ -1540,11 +1540,6 @@ public class Launcher extends StatefulActivity<LauncherState>
      * the pill in place, above the dock.
      */
     public void openSearchFromPill(View pill) {
-        if (!getDeviceProfile().getDeviceProperties().isLargeScreen()
-                && !LauncherPrefs.isUniversalSearchOnHome(this)) {
-            toggleAllApps(/* focusSearch= */ true);
-            return;
-        }
         boolean island = Settings.System.getInt(getContentResolver(),
                 "status_bar_show_dynamic_island", 0) != 0;
         RectF from = new RectF();

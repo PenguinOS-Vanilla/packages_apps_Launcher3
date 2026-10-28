@@ -892,7 +892,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
             }
 
             viewsToAnimate.forEach(view -> {
-                if (!mCosLaunch || !mDeviceProfile.getDeviceProperties().isLargeScreen()) {
+                if (!mCosLaunch) {
                     view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 }
 
@@ -2233,11 +2233,10 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
                                 false /* playAlphaReveal */,
                                 Utilities.blurBackgroundAtAppLaunch(
                                         mLauncher.getApplicationContext()) /* playBlur */,
-                                mCosLaunch && mDeviceProfile.getDeviceProperties().isLargeScreen()
-                                        && launcherView != null
+                                mCosLaunch && launcherView != null
                                         && launcherView.getTag() instanceof ItemInfo item
                                         && item.container == LauncherSettings.Favorites.CONTAINER_HOTSEAT,
-                                mCosLaunch && mDeviceProfile.getDeviceProperties().isLargeScreen(),
+                                mCosLaunch,
                                 fromPredictiveBack).getAnimators());
 
                 // We play StaggeredWorkspaceAnim as a part of the closing window animation.

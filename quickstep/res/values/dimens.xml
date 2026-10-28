@@ -654,10 +654,10 @@
     <dimen name="desktop_windowing_freeform_task_rounded_corner_radius">16dp</dimen>
 
     <!-- COS reference: 179px at 3.5 density. -->
-    <dimen name="cos_tablet_content_blur_radius">51dp</dimen>
+    <dimen name="cos_content_blur_radius">51dp</dimen>
     <!-- Below this the content blur is not visible, but Skia would blur at half or full
          resolution and allocate new full-size GPU textures as the close lands on its icon. -->
-    <dimen name="cos_tablet_content_blur_min_radius">6dp</dimen>
+    <dimen name="cos_content_blur_min_radius">6dp</dimen>
     <!-- How far a closing window passes its icon before settling, as on ColorOS 17. -->
     <dimen name="cos_close_bounce_distance">6dp</dimen>
 </resources>

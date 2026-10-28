@@ -73,36 +73,35 @@ class LauncherDepthController(
             stateManager.currentStableState.shouldBlurWorkspace(launcher, targetState)
         val shouldBlurWorkspace = blurWorkspaceWithWallpaper || stateBlursWorkspace
 
-        val cosTablet = QuickstepTransitionManager.cosExperience(launcher) &&
-            launcher.deviceProfile.deviceProperties.isLargeScreen
+        val cosContent = QuickstepTransitionManager.cosExperience(launcher)
         // Match COS's content blur in dp. Blurring a 150dp offscreen workspace layer extends
         // far beyond its edges; the 51dp reference radius preserves text/widget silhouettes.
-        val radius = if (cosTablet) {
+        val radius = if (cosContent) {
             mCurrentBlur * minOf(1f,
-                launcher.resources.getDimension(R.dimen.cos_tablet_content_blur_radius) / mMaxBlurRadius)
+                launcher.resources.getDimension(R.dimen.cos_content_blur_radius) / mMaxBlurRadius)
         } else mCurrentBlur.toFloat()
-        // Drop the near-invisible tail of the tablet blur instead of allocating ever larger
+        // Drop the near-invisible tail of the COS blur instead of allocating ever larger
         // blur textures in the last frames of a close. The radius curve itself is unchanged.
-        val minRadius = if (cosTablet) {
-            launcher.resources.getDimension(R.dimen.cos_tablet_content_blur_min_radius)
+        val minRadius = if (cosContent) {
+            launcher.resources.getDimension(R.dimen.cos_content_blur_min_radius)
         } else 0f
         val blurEffect =
             if (shouldBlurWorkspace && radius > minRadius)
                 RenderEffect.createBlurEffect(
                     radius,
                     radius,
-                    if (cosTablet) Shader.TileMode.CLAMP else Shader.TileMode.DECAL,
+                    if (cosContent) Shader.TileMode.CLAMP else Shader.TileMode.DECAL,
                 ) // If blur is not desired, clear the blur effect from the depth targets.
             else null
         // COS keeps its dock sharp while a closing app lands on home, but the dock blurs with
         // the rest of home behind the app drawer. The hotseat keeps a clear margin above its
         // search pill, so that blur fades out inside it instead of being cut off.
-        val hotseatBlurEffect = if (cosTablet && !stateBlursWorkspace) null else blurEffect
+        val hotseatBlurEffect = if (cosContent && !stateBlursWorkspace) null else blurEffect
         val fullRadius =
-            if (cosTablet) {
+            if (cosContent) {
                 minOf(
                     mMaxBlurRadius.toFloat(),
-                    launcher.resources.getDimension(R.dimen.cos_tablet_content_blur_radius),
+                    launcher.resources.getDimension(R.dimen.cos_content_blur_radius),
                 )
             } else mMaxBlurRadius.toFloat()
         // The dock glass is a compositor blur that stays sharp-edged under a view blur, so it
