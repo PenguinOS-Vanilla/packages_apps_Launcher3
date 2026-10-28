@@ -221,8 +221,9 @@ public class UniversalSearchAlgorithm implements SearchAlgorithm<AdapterItem> {
         if (token != mRequest.get()) {
             return;
         }
-        ArrayList<AdapterItem> items = new ArrayList<>(historyItems(
-                () -> publishEmptyQuery(mRequest.get(), query, appItems, callback)));
+        ArrayList<AdapterItem> items = mSpotlight ? new ArrayList<>()
+                : new ArrayList<>(historyItems(
+                        () -> publishEmptyQuery(mRequest.get(), query, appItems, callback)));
         if (mAppLibrary && LauncherPrefs.SEARCH_RECENT_SCREENSHOTS.get(mContext)) {
             List<UniversalSearchResult> shots = MediaProvider.recentScreenshots(
                     mContext, MAX_SCREENSHOTS);
