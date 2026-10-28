@@ -12,8 +12,10 @@ import android.app.WallpaperManager;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
@@ -32,6 +34,7 @@ import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
 import android.media.session.PlaybackState;
 import android.net.Uri;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.speech.RecognizerIntent;
 import android.text.Editable;
@@ -119,6 +122,79 @@ public class SpotlightView extends AbstractFloatingView
     private android.graphics.Insets mBarInsets = android.graphics.Insets.NONE;
     private int mImeBottom;
     private boolean mHadWindowFocus;
+    private ValueAnimator mRevealAnimator;
+    private float mRevealProgress;
+    private boolean mScreenReceiverRegistered;
+    private final BroadcastReceiver mScreenReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction()) && mIsOpen) {
+                close(false);
+            }
+        }
+    };
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        getContext().registerReceiver(mScreenReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF),
+                Context.RECEIVER_NOT_EXPORTED);
+        mScreenReceiverRegistered = true;
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        if (mScreenReceiverRegistered) {
+            getContext().unregisterReceiver(mScreenReceiver);
+            mScreenReceiverRegistered = false;
+        }
+        if (mRevealAnimator != null) mRevealAnimator.cancel();
+        super.onDetachedFromWindow();
+    }
+
+    /** A single reversible clock keeps the field and unfolding results together. */
+    private void revealPanel(boolean open) {
+        if (mRevealAnimator != null) mRevealAnimator.cancel();
+        ValueAnimator animator = ValueAnimator.ofFloat(mRevealProgress, open ? 1f : 0f);
+        mRevealAnimator = animator;
+        animator.setDuration(Math.round((open ? 420 : 280)
+                * Math.abs((open ? 1f : 0f) - mRevealProgress)));
+        animator.setInterpolator(EASE);
+        animator.addUpdateListener(a -> {
+            mRevealProgress = (float) a.getAnimatedValue();
+            applyRevealProgress();
+        });
+        animator.addListener(new AnimatorListenerAdapter() {
+            private boolean cancelled;
+            @Override
+            public void onAnimationCancel(Animator animation) { cancelled = true; }
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (mRevealAnimator == animation) mRevealAnimator = null;
+                if (!cancelled && !open) removeFromHost();
+            }
+        });
+        animator.start();
+    }
+
+    private void applyRevealProgress() {
+        float t = mRevealProgress;
+        mPanel.setPivotX(mPanel.getWidth() / 2f);
+        mPanel.setPivotY(0f);
+        mPanel.setScaleX(0.96f + 0.04f * t);
+        mPanel.setScaleY(0.96f + 0.04f * t);
+        mPanel.setTranslationY(-dp(32) * (1f - t));
+        mPanel.setAlpha(t);
+        mField.setAlpha(1f);
+        mCard.setAlpha(1f);
+        mCard.setTranslationY(-dp(20) * (1f - t));
+        // Reveal from the top without stretching the text; recompute after IME relayouts.
+        int height = Math.round(mCard.getHeight() * t);
+        mCard.setClipBounds(t == 1f ? null
+                : new android.graphics.Rect(0, 0, mCard.getWidth(), height));
+        mScrim.setAlpha(t);
+        if (mHomeBlur != null) mHomeBlur.setAlpha(t);
+    }
     // The Dynamic Island the field grows out of and shrinks back into.
     private final RectF mIsland = new RectF();
     // The island at rest around the camera, which places the field.
@@ -488,6 +564,12 @@ public class SpotlightView extends AbstractFloatingView
         ((ViewGroup.MarginLayoutParams) mCard.getLayoutParams()).topMargin = split ? dp(10) : 0;
     }
 
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        super.onLayout(changed, l, t, r, b);
+        if (!mAtTop && mPanel != null) applyRevealProgress();
+    }
+
     private void forcePanelMeasure() {
         // The panel sits inside another FrameLayout. Its cached measurement must not
         // hide changes to our margins, width or the result card's height limit.
@@ -508,6 +590,13 @@ public class SpotlightView extends AbstractFloatingView
 
     private void animateOpen(RectF from) {
         if (!mIsOpen || !isAttachedToWindow()) return;
+        if (!mAtTop) {
+            applyRevealProgress();
+            revealPanel(true);
+            mInput.requestFocus();
+            showKeyboardWhenReady();
+            return;
+        }
         int[] location = new int[2];
         mField.getLocationInWindow(location);
         if (mAtTop) {
@@ -573,11 +662,11 @@ public class SpotlightView extends AbstractFloatingView
             });
             return;
         }
-        animate().alpha(0f).setDuration(180)
-                .withEndAction(() -> removeFromHost()).start();
+        revealPanel(false);
     }
 
     private void removeFromHost() {
+        if (mRevealAnimator != null) mRevealAnimator.cancel();
         animate().cancel();
         mField.animate().cancel();
         mCard.animate().cancel();
@@ -642,6 +731,14 @@ public class SpotlightView extends AbstractFloatingView
     @Override
     public void onWindowFocusChanged(boolean hasWindowFocus) {
         super.onWindowFocusChanged(hasWindowFocus);
+        PowerManager power = getContext().getSystemService(PowerManager.class);
+        android.app.KeyguardManager keyguard =
+                getContext().getSystemService(android.app.KeyguardManager.class);
+        if (mIsOpen && ((!power.isInteractive())
+                || (keyguard != null && keyguard.isKeyguardLocked()))) {
+            post(() -> { if (mIsOpen) close(false); });
+            return;
+        }
         // Something opened from here took over the screen.
         if (hasWindowFocus) {
             mHadWindowFocus = true;
