@@ -25,6 +25,7 @@ import static com.android.quickstep.util.FloatingIconViewHelper.getFloatingIconV
 import android.graphics.RectF;
 import android.view.View;
 import com.android.app.animation.Interpolators;
+import com.android.launcher3.QuickstepTransitionManager;
 import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.uioverrides.QuickstepLauncher;
 import com.android.launcher3.views.ClipIconView;
@@ -59,7 +60,10 @@ public final class HomeIconAnimation {
         mSpring = spring;
         spring.addAnimatorListener(mIcon);
         mIcon.setOnTargetChangeListener(spring::onTargetPositionChanged);
-        mIcon.setFastFinishRunnable(spring::end);
+        // With ColorOS motion a touch must not cut the flight short: an app tapped meanwhile
+        // launches while the closing window keeps flying into its icon.
+        mIcon.setFastFinishRunnable(QuickstepTransitionManager.cosExperience(mLauncher)
+                ? null : spring::end);
     }
     public float getWindowAlpha(float progress) {
         return mSpring != null && mSpring.isCos() ? 1 - mSpring.getCosFadeProgress()
