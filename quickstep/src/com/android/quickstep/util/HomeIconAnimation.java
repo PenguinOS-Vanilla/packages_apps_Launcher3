@@ -62,8 +62,9 @@ public final class HomeIconAnimation {
         mIcon.setOnTargetChangeListener(spring::onTargetPositionChanged);
         // With ColorOS motion a touch must not cut the flight short: an app tapped meanwhile
         // launches while the closing window keeps flying into its icon.
-        mIcon.setFastFinishRunnable(QuickstepTransitionManager.cosExperience(mLauncher)
-                ? null : spring::end);
+        mIcon.setFinishOnTouchDown(!QuickstepTransitionManager.cosExperience(mLauncher));
+        // Explicit cancellation still ends the spring before its view is recycled.
+        mIcon.setFastFinishRunnable(spring::end);
     }
     public float getWindowAlpha(float progress) {
         return mSpring != null && mSpring.isCos() ? 1 - mSpring.getCosFadeProgress()

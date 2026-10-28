@@ -495,9 +495,12 @@ public class FloatingIconView extends FrameLayout implements
         }
     }
 
-    /**
-     * Sets a runnable that is called after a call to {@link #fastFinish()}.
-     */
+    /** Keep the complete icon renderer alive during a parallel home/app launch. */
+    public void setFinishOnTouchDown(boolean finishOnTouchDown) {
+        mListenerView.setCloseOnTouchDown(finishOnTouchDown);
+    }
+
+    /** Sets a runnable that is called by {@link #fastFinish()}. */
     public void setFastFinishRunnable(Runnable runnable) {
         mFastFinishRunnable = runnable;
     }
@@ -742,6 +745,7 @@ public class FloatingIconView extends FrameLayout implements
         mIsOpening = false;
         mPositionOut = null;
         mListenerView.setListener(null);
+        mListenerView.setCloseOnTouchDown(true);
         mOriginalIcon = null;
         mOnTargetChangeRunnable = null;
         mBadge = null;
