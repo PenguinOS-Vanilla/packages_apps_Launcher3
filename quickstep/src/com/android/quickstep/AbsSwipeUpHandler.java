@@ -1203,8 +1203,16 @@ public abstract class AbsSwipeUpHandler<
                 || mRecentsAnimationController == null || mHomeWindowAnimations.size() != 1) {
             return;
         }
-        ThumbnailData snapshot = mRecentsAnimationController.screenshotTask(
-                mGestureState.getTopRunningTaskId());
+        int taskId = mGestureState.getTopRunningTaskId();
+        ThumbnailData snapshot = mTaskSnapshotCache.get(taskId);
+        if (snapshot == null) {
+            snapshot = mRecentsAnimationController.screenshotTask(taskId);
+            if (snapshot != null) {
+                // The normal home-finish path needs this same capture. Do not capture again
+                // and wait for another UI-helper round trip on the app-launch critical path.
+                mTaskSnapshotCache.put(taskId, snapshot);
+            }
+        }
         android.graphics.Bitmap bitmap = snapshot == null ? null : snapshot.getThumbnail();
         int rotation = mRemoteTargetHandles[0].getTaskViewSimulator().getOrientationState()
                 .getDisplayRotation();

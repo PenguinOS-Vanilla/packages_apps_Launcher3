@@ -737,7 +737,9 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
         mLauncher.getStateManager().setCurrentAnimation(anim);
 
         // Note: the targetBounds are relative to the launcher
-        int startDelay = getSingleFrameMs(mLauncher);
+        // COS motion can start with the first available app surface; do not hold the tap
+        // for an extra frame before moving either the app or the launcher content.
+        int startDelay = mCosLaunch ? 0 : getSingleFrameMs(mLauncher);
         Animator windowAnimator = getOpeningWindowAnimators(
                 v, appSurfaces, wallpaperSurfaces, nonAppSurfaces, launcherClosing);
         windowAnimator.setStartDelay(startDelay);
@@ -1001,6 +1003,8 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
                         : mLauncher.getTaskbarInteractor().findMatchingAsyncView(v),
                 null /* fadeOutView */, !appTargetsAreTranslucent, launcherIconBounds,
                 true /* isOpening */);
+        // A second touch must not recycle the icon while its opening animation owns it.
+        floatingView.setFinishOnTouchDown(!mCosLaunch);
         Rect crop = new Rect();
         Matrix matrix = new Matrix();
 
@@ -2435,7 +2439,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
                 composeIconLaunchAnimator(anim, mV, appSurfaces, wallpaperSurfaces, nonAppSurfaces,
                         launcherClosing);
                 addCujInstrumentation(anim, Cuj.CUJ_LAUNCHER_APP_LAUNCH_FROM_ICON);
-                skipFirstFrame = false;
+                skipFirstFrame = mCosLaunch;
             }
 
             if (launcherClosing) {
