@@ -371,7 +371,9 @@ public class Hotseat extends CellLayout implements Insettable {
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) getLayoutParams();
         DeviceProfile grid = mActivity.getDeviceProfile();
 
+        // The Search pill belongs to the iPad dock; phones keep the stock hotseat search bar.
         mSearchPill.setVisibility(grid.isVerticalBarLayout()
+                || !grid.getDeviceProperties().isLargeScreen()
                 || grid.getDeviceProperties().getTaskbarConfiguration().isTaskbarPresent()
                 || !LauncherPrefs.isUniversalSearchOnHome(getContext())
                 ? View.GONE : View.VISIBLE);

@@ -25,7 +25,9 @@ public final class PenguinDockMetrics {
      */
     public static boolean usesNaturalDock(com.android.launcher3.DeviceProfile dp) {
         var hotseat = dp.getHotseatProfile();
-        return !dp.isVerticalBarLayout()
+        // Phones keep the stock AOSP hotseat; the iPad dock is a large screen layout.
+        return dp.getDeviceProperties().isLargeScreen()
+                && !dp.isVerticalBarLayout()
                 && !dp.getDeviceProperties().isTwoPanels()
                 && !hotseat.getAreNavButtonsInline()
                 && !hotseat.isQsbInline();
