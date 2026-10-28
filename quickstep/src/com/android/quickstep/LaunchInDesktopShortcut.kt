@@ -47,13 +47,16 @@ class LaunchInDesktopShortcut(target: ActivityContext, itemInfo: ItemInfo, origi
     }
 
     companion object {
-        /** Only offered on devices that can enter desktop mode, for resizeable apps. */
+        /** Only offered where the launcher's display can host desktops, for resizeable apps. */
         @JvmField
         val FACTORY =
             SystemShortcut.Factory<ActivityContext> { target, itemInfo, originalView ->
                 val context = target.asContext()
                 when {
-                    !DesktopModeStatus.canEnterDesktopMode(context) -> null
+                    !DesktopModeStatus.isDesktopModeSupportedOnDisplay(
+                        context,
+                        originalView.display ?: context.display,
+                    ) -> null
                     itemInfo.itemType != ITEM_TYPE_APPLICATION -> null
                     !Utilities.isResizeableActivity(context, itemInfo.targetComponent) -> null
                     else -> LaunchInDesktopShortcut(target, itemInfo, originalView)
