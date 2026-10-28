@@ -114,6 +114,8 @@ public class SpotlightView extends AbstractFloatingView
     private final Adapter mAdapter = new Adapter();
     private boolean mAtTop;
     private boolean mTopAligned;
+    private android.graphics.Insets mBarInsets = android.graphics.Insets.NONE;
+    private int mImeBottom;
     private boolean mHadWindowFocus;
     // The Dynamic Island the field grows out of and shrinks back into.
     private final RectF mIsland = new RectF();
@@ -345,8 +347,6 @@ public class SpotlightView extends AbstractFloatingView
     private void setup(BaseActivity launcher, boolean atTop, RectF from) {
         mHost = launcher;
         mAtTop = atTop;
-        // Tablet search has the same placement on home, over apps and on a desktop.
-        mTopAligned = true;
         mIsland.set(from);
         if (atTop) {
             ((Launcher) launcher).islandBounds(mIslandAtRest);
@@ -372,7 +372,6 @@ public class SpotlightView extends AbstractFloatingView
         mResults.setLayoutManager(new LinearLayoutManager(launcher));
         mResults.setAdapter(mAdapter);
 
-        LinearLayout content = findViewById(R.id.spotlight_content);
         if (atTop) {
             // As on iOS the field becomes the island: it keeps the island's top edge around the
             // camera, tall enough that its centred text row clears the lens, with the status bar,
@@ -393,15 +392,6 @@ public class SpotlightView extends AbstractFloatingView
             // Over a desktop window there is no home snapshot to blur, so darken the scrim.
             // SearchActivity also blurs the windows behind this one.
             mScrim.setBackgroundColor(0x08000000);
-            // Phones keep search by the thumb; tablets keep the field above the results.
-            if (!mTopAligned) {
-                content.removeView(mField);
-                content.addView(mField);
-                content.setGravity(android.view.Gravity.BOTTOM);
-                ((ViewGroup.MarginLayoutParams) mCard.getLayoutParams()).topMargin = 0;
-                ((ViewGroup.MarginLayoutParams) mCard.getLayoutParams()).bottomMargin =
-                        getResources().getDimensionPixelSize(R.dimen.spotlight_margin);
-            }
         }
 
         mScrim.setOnClickListener(v -> close(true));
@@ -425,15 +415,10 @@ public class SpotlightView extends AbstractFloatingView
 
     @Override
     public WindowInsets onApplyWindowInsets(WindowInsets insets) {
-        android.graphics.Insets bars = insets.getInsets(
+        mBarInsets = insets.getInsets(
                 WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-        int keyboard = insets.getInsets(WindowInsets.Type.ime()).bottom;
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mPanel.getLayoutParams();
-        lp.topMargin = bars.top + dp(40);
-        lp.bottomMargin = Math.max(keyboard, bars.bottom + dp(80)) + dp(12);
-        lp.leftMargin = bars.left + dp(12);
-        lp.rightMargin = bars.right + dp(12);
-        mPanel.setLayoutParams(lp);
+        mImeBottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
+        requestLayout();
         return super.onApplyWindowInsets(insets);
     }
 
@@ -445,9 +430,29 @@ public class SpotlightView extends AbstractFloatingView
         }
         FrameLayout.LayoutParams panel = (FrameLayout.LayoutParams) mPanel.getLayoutParams();
         int width = MeasureSpec.getSize(widthMeasureSpec);
+        panel.leftMargin = mBarInsets.left + dp(12);
+        panel.rightMargin = mBarInsets.right + dp(12);
         int availableWidth = Math.max(1, width - panel.leftMargin - panel.rightMargin);
-        panel.width = Math.min(availableWidth, Math.min(dp(650),
-                Math.max(dp(340), Math.round(width * 0.51f))));
+        int availableHeight = Math.max(0, MeasureSpec.getSize(heightMeasureSpec)
+                - mBarInsets.top - mBarInsets.bottom - dp(24));
+        mTopAligned = Math.min(availableWidth, availableHeight) >= dp(600);
+        panel.gravity = (mTopAligned ? android.view.Gravity.TOP : android.view.Gravity.BOTTOM)
+                | android.view.Gravity.CENTER_HORIZONTAL;
+        panel.topMargin = mBarInsets.top + dp(mTopAligned ? 40 : 12);
+        panel.bottomMargin = Math.max(mImeBottom,
+                mBarInsets.bottom + dp(mTopAligned ? 80 : 0)) + dp(12);
+        panel.width = mTopAligned ? Math.min(availableWidth, Math.min(dp(650),
+                Math.max(dp(340), Math.round(width * 0.51f)))) : availableWidth;
+
+        // Keep the divider between the results and field in either ordering.
+        LinearLayout content = findViewById(R.id.spotlight_content);
+        View first = mTopAligned ? mField : mCard;
+        if (content.getChildAt(0) != first) {
+            content.removeView(mField);
+            content.removeView(mCard);
+            content.addView(first, 0);
+            content.addView(mTopAligned ? mCard : mField);
+        }
         ViewGroup.LayoutParams card = mCard.getLayoutParams();
         card.height = ViewGroup.LayoutParams.WRAP_CONTENT;
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
