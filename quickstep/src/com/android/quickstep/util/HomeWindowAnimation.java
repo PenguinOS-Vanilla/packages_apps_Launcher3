@@ -16,10 +16,18 @@
 package com.android.quickstep.util;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Matrix;
+import android.graphics.Outline;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.view.RemoteAnimationTarget;
+import android.view.View;
+import android.view.ViewOutlineProvider;
+import android.widget.ImageView;
+
+import androidx.annotation.Nullable;
+
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.Utilities;
 
@@ -44,6 +52,11 @@ public final class HomeWindowAnimation implements RectFSpringAnim.OnUpdateListen
     private final float mStartRadius;
     private final float mEndRadius;
     private final Callbacks mCallbacks;
+    // Draws the flight once the window itself is gone; see createStandIn().
+    @Nullable
+    private View mStandIn;
+    private float mStandInRadius;
+    private float mAlpha = 1f;
 
     public HomeWindowAnimation(RectF sourceCrop, Matrix homeToWindow, TransformParams params,
             float startRadius, float endRadius, Callbacks callbacks) {
@@ -100,9 +113,63 @@ public final class HomeWindowAnimation implements RectFSpringAnim.OnUpdateListen
         } else {
             mMatrix.setRectToRect(mSourceCrop, mWindowRect, Matrix.ScaleToFit.FILL);
         }
-        mParams.setTargetAlpha(mCallbacks.getWindowAlpha(progress)).setCornerRadius(radius);
+        mAlpha = mCallbacks.getWindowAlpha(progress);
+        mParams.setTargetAlpha(mAlpha).setCornerRadius(radius);
         mParams.applySurfaceParams(mParams.createSurfaceParams(this));
+        mStandInRadius = radius;
+        updateStandIn();
         mCallbacks.onUpdate(currentRect, progress, mMatrix.mapRadius(radius));
+    }
+
+    /**
+     * Returns a view showing [snapshot] that takes over this flight from the window, for when the
+     * window's transition has to finish before the flight lands. The caller adds it to a
+     * full-screen layer at (0, 0) and removes it when the flight ends.
+     */
+    @Nullable
+    public View createStandIn(Context context, Bitmap snapshot) {
+        if (mCallbacks.isWidget() || mSourceCrop.isEmpty()) {
+            return null;
+        }
+        ImageView view = new ImageView(context);
+        view.setImageBitmap(snapshot);
+        view.setScaleType(ImageView.ScaleType.FIT_XY);
+        view.setPivotX(0f);
+        view.setPivotY(0f);
+        view.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View v, Outline outline) {
+                outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), mStandInRadius);
+            }
+        });
+        view.setClipToOutline(true);
+        mStandIn = view;
+        // Where the window was last drawn, so the first frame does not show it full screen.
+        updateStandIn();
+        return view;
+    }
+
+    private void updateStandIn() {
+        if (mStandIn == null) {
+            return;
+        }
+        // The window surface transform: crop space onto the current window rect.
+        mStandIn.setScaleX(mWindowRect.width() / mSourceCrop.width());
+        mStandIn.setScaleY(mWindowRect.height() / mSourceCrop.height());
+        mStandIn.setTranslationX(mWindowRect.left);
+        mStandIn.setTranslationY(mWindowRect.top);
+        mStandIn.setAlpha(mAlpha);
+        mStandIn.invalidateOutline();
+    }
+
+    /** Stops driving the stand-in; see createStandIn(). */
+    public void clearStandIn() {
+        mStandIn = null;
+    }
+
+    /** Size of the window content the stand-in shows, before the flight scales it. */
+    public RectF getSourceCrop() {
+        return mSourceCrop;
     }
 
     @Override

@@ -82,6 +82,9 @@ public abstract class SwipeUpAnimationLogic implements
     protected float mDragLengthFactor = 1;
 
     protected boolean mIsSwipeForSplit;
+    // Window renderers of the current flight home, one per remote target.
+    protected final java.util.ArrayList<com.android.quickstep.util.HomeWindowAnimation>
+            mHomeWindowAnimations = new java.util.ArrayList<>();
 
     public SwipeUpAnimationLogic(Context context, GestureState gestureState,
             RotationTouchHelper rotationTouchHelper) {
@@ -341,6 +344,7 @@ public abstract class SwipeUpAnimationLogic implements
         // TODO(b/195473584) compute separate end targets for different staged split
         final RectF targetRect = homeAnimationFactory.getWindowTargetRect();
         RectFSpringAnim[] out = new RectFSpringAnim[mRemoteTargetHandles.length];
+        mHomeWindowAnimations.clear();
         Matrix[] homeToWindowPositionMap = new Matrix[mRemoteTargetHandles.length];
         RectF[] startRects = updateProgressForStartRect(homeToWindowPositionMap, startProgress);
         for (int i = 0, mRemoteTargetHandlesLength = mRemoteTargetHandles.length;
@@ -411,6 +415,9 @@ public abstract class SwipeUpAnimationLogic implements
                 invariantStartRect);
         anim.addAnimatorListener(runner);
         anim.addOnUpdateListener(runner);
+        if (runner.mHomeWindowAnimation != null) {
+            mHomeWindowAnimations.add(runner.mHomeWindowAnimation);
+        }
         return anim;
     }
 

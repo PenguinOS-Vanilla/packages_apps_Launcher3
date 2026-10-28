@@ -141,6 +141,7 @@ import com.android.launcher3.util.SafeCloseable;
 import com.android.launcher3.util.ThreadedAnimator;
 import com.android.launcher3.util.TraceHelper;
 import com.android.launcher3.util.VibratorWrapper;
+import com.android.launcher3.views.BaseDragLayer;
 import com.android.mechanics.MotionValue;
 import com.android.mechanics.spec.InputDirection;
 import com.android.mechanics.spec.MotionSpec;
@@ -1183,15 +1184,53 @@ public abstract class AbsSwipeUpHandler<
                 || mStateCallback.hasStates(STATE_HANDLER_INVALIDATED)) {
             return false;
         }
+        RectFSpringAnim flight = mCatchableWindowAnim;
         detachHomeAnimationFromWindow();
         if (!mHomeAnimDetachedFromWindow) {
             return false;
         }
+        // Finishing hides the window at once, so its last frame flies on in its place.
+        flyStandIn(flight);
         mStateCallback.runOnceAtState(STATE_CURRENT_TASK_FINISHED, launch);
         // Settle on home now; the detached flight carries on to the icon on its own.
         mGestureState.setState(STATE_RECENTS_SCROLLING_FINISHED);
         mGestureState.setState(STATE_END_TARGET_ANIMATION_FINISHED);
         return true;
+    }
+
+    private void flyStandIn(@Nullable RectFSpringAnim flight) {
+        if (flight == null || !flight.isRunning() || mContainer == null
+                || mRecentsAnimationController == null || mHomeWindowAnimations.size() != 1) {
+            return;
+        }
+        ThumbnailData snapshot = mRecentsAnimationController.screenshotTask(
+                mGestureState.getTopRunningTaskId());
+        android.graphics.Bitmap bitmap = snapshot == null ? null : snapshot.getThumbnail();
+        int rotation = mRemoteTargetHandles[0].getTaskViewSimulator().getOrientationState()
+                .getDisplayRotation();
+        if (bitmap == null || (snapshot.rotation
+                != android.app.WindowConfiguration.ROTATION_UNDEFINED
+                && snapshot.rotation != rotation)) {
+            return;
+        }
+        com.android.quickstep.util.HomeWindowAnimation window = mHomeWindowAnimations.get(0);
+        View standIn = window.createStandIn(mContainer.asContext(), bitmap);
+        if (standIn == null) {
+            return;
+        }
+        RectF crop = window.getSourceCrop();
+        BaseDragLayer.LayoutParams lp = new BaseDragLayer.LayoutParams(
+                Math.round(crop.width()), Math.round(crop.height()));
+        lp.ignoreInsets = true;
+        BaseDragLayer<?> dragLayer = mContainer.getDragLayer();
+        dragLayer.addView(standIn, lp);
+        flight.addAnimatorListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                window.clearStandIn();
+                dragLayer.removeView(standIn);
+            }
+        });
     }
 
     private void detachHomeAnimationFromWindow() {
