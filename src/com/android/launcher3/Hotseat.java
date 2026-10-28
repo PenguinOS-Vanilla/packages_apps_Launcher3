@@ -495,6 +495,8 @@ public class Hotseat extends CellLayout implements Insettable {
         mPublishedDockRecentSlots = mDockCompanion != null && mNaturalDock
                 ? mDockCompanionSlots : 0;
         if (mDockCompanion != null) {
+            // Without the iPad dock, its recents section and divider are not shown at all.
+            mDockCompanion.setVisibility(mNaturalDock ? View.VISIBLE : View.GONE);
             int height = getShortcutsAndWidgets().getMeasuredHeight();
             mDockCompanion.measure(makeMeasureSpec(mDockCompanionSlots * mDockSlot,
                     MeasureSpec.EXACTLY), makeMeasureSpec(height, MeasureSpec.EXACTLY));
