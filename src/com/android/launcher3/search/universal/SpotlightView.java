@@ -114,6 +114,8 @@ public class SpotlightView extends AbstractFloatingView
     private final Adapter mAdapter = new Adapter();
     private boolean mAtTop;
     private boolean mTopAligned;
+    // Compact windows show the field and the results as two glass shapes, as iOS does.
+    private int mSplitState = -1;
     private android.graphics.Insets mBarInsets = android.graphics.Insets.NONE;
     private int mImeBottom;
     private boolean mHadWindowFocus;
@@ -435,35 +437,55 @@ public class SpotlightView extends AbstractFloatingView
         int availableWidth = Math.max(1, width - panel.leftMargin - panel.rightMargin);
         int availableHeight = Math.max(0, MeasureSpec.getSize(heightMeasureSpec)
                 - mBarInsets.top - mBarInsets.bottom - dp(24));
-        mTopAligned = Math.min(availableWidth, availableHeight) >= dp(600);
-        panel.gravity = (mTopAligned ? android.view.Gravity.TOP : android.view.Gravity.BOTTOM)
-                | android.view.Gravity.CENTER_HORIZONTAL;
-        panel.topMargin = mBarInsets.top + dp(mTopAligned ? 40 : 12);
+        boolean spacious = Math.min(availableWidth, availableHeight) >= dp(600);
+        // Search sits at the top in every window, with the results below it and above the
+        // keyboard. Compact windows span the width with a separate field and results card.
+        mTopAligned = true;
+        setSplit(!spacious);
+        panel.gravity = android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL;
+        panel.topMargin = mBarInsets.top + dp(spacious ? 40 : 12);
         panel.bottomMargin = Math.max(mImeBottom,
-                mBarInsets.bottom + dp(mTopAligned ? 80 : 0)) + dp(12);
-        panel.width = mTopAligned ? Math.min(availableWidth, Math.min(dp(650),
+                mBarInsets.bottom + dp(spacious ? 80 : 12)) + dp(12);
+        panel.width = spacious ? Math.min(availableWidth, Math.min(dp(650),
                 Math.max(dp(340), Math.round(width * 0.51f)))) : availableWidth;
 
-        // Keep the divider between the results and field in either ordering.
-        LinearLayout content = findViewById(R.id.spotlight_content);
-        View first = mTopAligned ? mField : mCard;
-        if (content.getChildAt(0) != first) {
-            content.removeView(mField);
-            content.removeView(mCard);
-            content.addView(first, 0);
-            content.addView(mTopAligned ? mCard : mField);
-        }
-        ViewGroup.LayoutParams card = mCard.getLayoutParams();
+        ViewGroup.MarginLayoutParams card = (ViewGroup.MarginLayoutParams) mCard.getLayoutParams();
         card.height = ViewGroup.LayoutParams.WRAP_CONTENT;
         forcePanelMeasure();
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         int available = Math.max(0, getMeasuredHeight() - panel.topMargin
-                - panel.bottomMargin - mField.getMeasuredHeight() - dp(1));
+                - panel.bottomMargin - mField.getMeasuredHeight()
+                - (mSplitState == 1 ? card.topMargin : dp(1)));
         if (mCard.getMeasuredHeight() > available) {
             card.height = available;
             forcePanelMeasure();
             super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         }
+    }
+
+    private void setSplit(boolean split) {
+        int state = split ? 1 : 0;
+        if (mSplitState == state) return;
+        mSplitState = state;
+        LinearLayout content = findViewById(R.id.spotlight_content);
+        // The divider sits between the field and the card in a single panel.
+        View divider = content.getChildAt(content.indexOfChild(mField) + 1);
+        if (divider != null && divider != mCard) {
+            divider.setVisibility(split ? GONE : VISIBLE);
+        }
+        mPanel.setBackground(split ? null
+                : new com.android.launcher3.util.PenguinDockGlass(mPanel, true));
+        mPanel.setClipToOutline(!split);
+        mPanel.setElevation(split ? 0 : dp(12));
+        content.setPaddingRelative(split ? 0 : dp(16), 0, split ? 0 : dp(16), 0);
+        mField.setBackground(split
+                ? new com.android.launcher3.util.PenguinDockGlass(mField, true) : null);
+        mField.setPaddingRelative(split ? dp(16) : 0, 0, split ? dp(4) : 0, 0);
+        mCard.setBackground(split
+                ? new com.android.launcher3.util.PenguinDockGlass(mCard, true) : null);
+        mCard.setClipToOutline(split);
+        mCard.setPaddingRelative(split ? dp(8) : 0, split ? dp(4) : 0, split ? dp(8) : 0, 0);
+        ((ViewGroup.MarginLayoutParams) mCard.getLayoutParams()).topMargin = split ? dp(10) : 0;
     }
 
     private void forcePanelMeasure() {
