@@ -418,7 +418,7 @@ public class SpotlightView extends AbstractFloatingView
         mBarInsets = insets.getInsets(
                 WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
         mImeBottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
-        requestLayout();
+        mPanel.requestLayout();
         return super.onApplyWindowInsets(insets);
     }
 
@@ -455,13 +455,33 @@ public class SpotlightView extends AbstractFloatingView
         }
         ViewGroup.LayoutParams card = mCard.getLayoutParams();
         card.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+        forcePanelMeasure();
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         int available = Math.max(0, getMeasuredHeight() - panel.topMargin
                 - panel.bottomMargin - mField.getMeasuredHeight() - dp(1));
         if (mCard.getMeasuredHeight() > available) {
             card.height = available;
+            forcePanelMeasure();
             super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         }
+    }
+
+    private void forcePanelMeasure() {
+        // The panel sits inside another FrameLayout. Its cached measurement must not
+        // hide changes to our margins, width or the result card's height limit.
+        for (View view = mCard; view != null && view != this;
+                view = view.getParent() instanceof View parent ? parent : null) {
+            view.forceLayout();
+        }
+    }
+
+    private void showKeyboardWhenReady() {
+        mInput.post(() -> {
+            if (mIsOpen && isAttachedToWindow() && mInput.hasFocus() && hasWindowFocus()) {
+                getContext().getSystemService(InputMethodManager.class)
+                        .showSoftInput(mInput, InputMethodManager.SHOW_IMPLICIT);
+            }
+        });
     }
 
     private void animateOpen(RectF from) {
@@ -493,8 +513,7 @@ public class SpotlightView extends AbstractFloatingView
                 .setInterpolator(EASE).start();
 
         mInput.requestFocus();
-        getContext().getSystemService(InputMethodManager.class)
-                .showSoftInput(mInput, InputMethodManager.SHOW_IMPLICIT);
+        showKeyboardWhenReady();
     }
 
     @Override
@@ -602,7 +621,12 @@ public class SpotlightView extends AbstractFloatingView
     public void onWindowFocusChanged(boolean hasWindowFocus) {
         super.onWindowFocusChanged(hasWindowFocus);
         // Something opened from here took over the screen.
-        if (hasWindowFocus) mHadWindowFocus = true;
+        if (hasWindowFocus) {
+            mHadWindowFocus = true;
+            if (mIsOpen && mInput != null && mInput.hasFocus()) {
+                showKeyboardWhenReady();
+            }
+        }
         if (!hasWindowFocus && mHadWindowFocus && mIsOpen) {
             // Not while the window is still telling its views about the focus change.
             post(() -> {
