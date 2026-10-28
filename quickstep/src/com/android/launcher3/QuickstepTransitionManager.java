@@ -389,6 +389,188 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
     };
 
 
+    private LaunchPreview mImmediatePreview;
+
+    /** Give icon taps their first frame without waiting for WM's opening app surface. */
+    public void beginImmediateAppLaunch(View source, ItemInfo item) {
+        if (!mCosLaunch || !(source instanceof BubbleTextView icon) || item == null
+                || item.itemType != LauncherSettings.Favorites.ITEM_TYPE_APPLICATION
+                || item.shouldUseBackgroundAnimation() || icon.getIcon() == null
+                || !source.isAttachedToWindow() || mLauncher.isInMultiWindowMode()
+                || mLauncher.shouldShowHomeBehindDesktop()
+                || !mLauncher.getSystemService(android.os.PowerManager.class).isInteractive()) {
+            return;
+        }
+        if (mImmediatePreview != null && mImmediatePreview.source == source
+                && mImmediatePreview.item == item) return;
+        cancelImmediateAppLaunch();
+        android.view.ViewGroup root = (android.view.ViewGroup) mDragLayer.getParent();
+        if (root == null || root.getWidth() == 0 || root.getHeight() == 0) return;
+        mImmediatePreview = new LaunchPreview(root, icon, item);
+        mImmediatePreview.start();
+    }
+
+    public void cancelImmediateAppLaunch() {
+        if (mImmediatePreview != null) mImmediatePreview.remove();
+    }
+
+    public void cancelImmediateAppLaunch(View source) {
+        if (mImmediatePreview != null && mImmediatePreview.source == source) {
+            mImmediatePreview.remove();
+        }
+    }
+
+    /** A noninteractive overlay, using the same crop/scale path as the real opening window. */
+    private final class LaunchPreview extends View implements Runnable {
+        final BubbleTextView source;
+        final ItemInfo item;
+        final android.view.ViewGroup root;
+        final RectF iconBounds = new RectF();
+        final RectF frame = new RectF();
+        final Rect drawableBounds = new Rect();
+        final Rect predictedScreenBounds = new Rect();
+        final float endRadius = getWindowCornerRadius(mLauncher);
+        final android.graphics.Paint fill = new android.graphics.Paint(
+                android.graphics.Paint.ANTI_ALIAS_FLAG);
+        final android.graphics.drawable.Drawable logo;
+        final AnimOpenProperties properties;
+        final float originalAlpha;
+        final long started = android.os.SystemClock.uptimeMillis();
+        final Runnable timeout = this::remove;
+        boolean removed;
+        boolean handedOff;
+
+        LaunchPreview(android.view.ViewGroup root, BubbleTextView source, ItemInfo item) {
+            super(mLauncher);
+            this.root = root;
+            this.source = source;
+            this.item = item;
+            originalAlpha = source.getAlpha();
+            Rect local = new Rect();
+            source.getIconBounds(local);
+            Utilities.getBoundsForViewInDragLayer(mDragLayer, source, local,
+                    false, null, iconBounds);
+            int[] dragLocation = new int[2];
+            int[] rootLocation = new int[2];
+            mDragLayer.getLocationOnScreen(dragLocation);
+            root.getLocationOnScreen(rootLocation);
+            iconBounds.offset(dragLocation[0] - rootLocation[0],
+                    dragLocation[1] - rootLocation[1]);
+            Rect target = new Rect(0, 0, root.getWidth(), root.getHeight());
+            if (mDeviceProfile.getDeviceProperties().getTaskbarConfiguration().isTaskbarPresent()
+                    && mDeviceProfile.getTaskbarProfile().isTaskbarPresentInApps()
+                    && !isTransientTaskbar()) {
+                int bottom = mSystemUiProxy.getHomeVisibilityState().getNavbarInsetPosition()
+                        - rootLocation[1];
+                if (bottom > 0) target.bottom = Math.min(target.bottom, bottom);
+            }
+            predictedScreenBounds.set(target);
+            predictedScreenBounds.offset(rootLocation[0], rootLocation[1]);
+            properties = new AnimOpenProperties(getResources(), target, iconBounds,
+                    source, 0, 0, false, false);
+            android.graphics.drawable.Drawable.ConstantState state =
+                    source.getIcon().getConstantState();
+            logo = state == null ? source.getIcon() : state.newDrawable(getResources()).mutate();
+            android.util.TypedValue color = new android.util.TypedValue();
+            mLauncher.getTheme().resolveAttribute(android.R.attr.colorBackground, color, true);
+            fill.setColor(color.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT
+                    && color.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT
+                    ? color.data : 0xff121212);
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+            setClickable(false);
+        }
+
+        void start() {
+            layout(0, 0, root.getWidth(), root.getHeight());
+            root.getOverlay().add(this);
+            source.setAlpha(0f);
+            postDelayed(timeout, 5000);
+            invalidate();
+            postOnAnimation(this);
+        }
+
+        long elapsed() { return Math.max(0, android.os.SystemClock.uptimeMillis() - started); }
+
+        @Override
+        public void run() {
+            if (removed) return;
+            if (mLauncher.isDestroyed() || !root.isAttachedToWindow()) {
+                remove();
+                return;
+            }
+            invalidate();
+            // Hold a still logo, without redrawing continuously, if WM takes longer.
+            if (elapsed() < APP_LAUNCH_DURATION) postOnAnimation(this);
+        }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas canvas) {
+            if (removed) return;
+            float progress = Utilities.boundToRange((float) elapsed() / APP_LAUNCH_DURATION, 0, 1);
+            float t = mOpeningInterpolator.getInterpolation(progress);
+            float iconScale = Utilities.mapRange(t, properties.initialAppIconScale,
+                    properties.finalAppIconScale);
+            float cropWidth = Utilities.mapRange(t, properties.cropWidthStart,
+                    properties.cropWidthEnd);
+            float cropHeight = Utilities.mapRange(t, properties.cropHeightStart,
+                    properties.cropHeightEnd);
+            float scale = Math.min(1f, Math.max(iconBounds.width() * iconScale / cropWidth,
+                    iconBounds.height() * iconScale / cropHeight));
+            float cx = iconBounds.centerX() + properties.dX * t;
+            float cy = iconBounds.centerY() + properties.dY * t;
+            float width = cropWidth * scale;
+            float height = cropHeight * scale;
+            frame.set(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2);
+            float radius = Utilities.mapRange(t, properties.cropWidthStart / 2f,
+                    endRadius) * scale;
+            fill.setAlpha(Math.round(255 * Math.min(1f, progress * 8f)));
+            canvas.drawRoundRect(frame, radius, radius, fill);
+            float size = Math.min(Math.min(width, height), properties.cropWidthStart * scale);
+            drawableBounds.set(logo.getBounds());
+            logo.setBounds(Math.round(cx - size / 2), Math.round(cy - size / 2),
+                    Math.round(cx + size / 2), Math.round(cy + size / 2));
+            logo.draw(canvas);
+            logo.setBounds(drawableBounds);
+        }
+
+        boolean matchesWindow(AnimatedSurface[] surfaces) {
+            Rect actual = getWindowTargetBounds(surfaces, 0);
+            for (AnimatedSurface surface : surfaces) {
+                if (!AnimatedSurfaceUtils.isOpening(surface)) continue;
+                if (shouldCropToInset(surface)) {
+                    actual.bottom = Math.min(actual.bottom,
+                            mSystemUiProxy.getHomeVisibilityState().getNavbarInsetPosition());
+                }
+                break;
+            }
+            // Let the normal transition handle an unexpected/letterboxed target; do not seek
+            // a real window using a preview that was drawn in a different coordinate space.
+            return actual.equals(predictedScreenBounds);
+        }
+
+        void handOff() {
+            if (removed || handedOff) return;
+            handedOff = true;
+            removeCallbacks(timeout);
+            source.setAlpha(originalAlpha);
+            // Allow the first surface transaction to reach RenderThread before fading the logo.
+            postOnAnimation(() -> {
+                if (!removed) animate().alpha(0f).setDuration(64).withEndAction(this::remove).start();
+            });
+        }
+
+        void remove() {
+            if (removed) return;
+            removed = true;
+            removeCallbacks(this);
+            removeCallbacks(timeout);
+            animate().cancel();
+            root.getOverlay().remove(this);
+            if (source.getAlpha() == 0f) source.setAlpha(originalAlpha);
+            if (mImmediatePreview == this) mImmediatePreview = null;
+        }
+    }
+
     private final Interpolator mOpeningXInterpolator;
     private final Interpolator mOpeningInterpolator;
     private final Interpolator mOpeningRadiusInterpolator;
@@ -485,6 +667,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
 
     @Override
     public void onDeviceProfileChanged(DeviceProfile dp) {
+        cancelImmediateAppLaunch();
         mDeviceProfile = dp;
     }
 
@@ -538,6 +721,9 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
     public ActivityOptionsWrapper getActivityLaunchOptions(View v, ItemInfo itemInfo) {
         boolean fromRecents = isLaunchingFromRecents(v, null /* targets */);
         RunnableList onEndCallback = new RunnableList();
+        LaunchPreview preview = mImmediatePreview != null && mImmediatePreview.source == v
+                ? mImmediatePreview : null;
+        if (preview != null) onEndCallback.add(preview::remove);
 
         // Handle the case where an already visible task is launched which results in no transition
         TaskRestartedDuringLaunchListener restartedListener =
@@ -1703,6 +1889,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
     }
 
     public void onActivityDestroyed() {
+        cancelImmediateAppLaunch();
         mCleanupTask.executeAllAndDestroy();
         unregisterRemoteAnimations();
         unregisterRemoteTransitions();
@@ -2403,10 +2590,13 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
 
         private final View mV;
         private final RunnableList mOnEndCallback;
+        private final LaunchPreview mPreview;
 
         AppLaunchAnimationRunner(View v, RunnableList onEndCallback) {
             mV = v;
             mOnEndCallback = onEndCallback;
+            mPreview = mImmediatePreview != null && mImmediatePreview.source == v
+                    ? mImmediatePreview : null;
         }
 
         @Override
@@ -2426,6 +2616,12 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
             final boolean launchingFromWidget = mV instanceof LauncherAppWidgetHostView;
             final boolean launchingFromRecents = isLaunchingFromRecents(mV, appSurfaces);
             final boolean skipFirstFrame;
+            boolean continuePreview = mPreview != null && !mPreview.removed
+                    && !launchingFromWidget && !launchingFromRecents
+                    && getRotationChange(appSurfaces) == 0
+                    && !areAllSurfacesTranslucent(appSurfaces)
+                    && mPreview.matchesWindow(appSurfaces);
+            if (mPreview != null && !continuePreview) mPreview.remove();
             if (launchingFromWidget) {
                 composeWidgetLaunchAnimator(anim, (LauncherAppWidgetHostView) mV, appSurfaces,
                         wallpaperSurfaces, nonAppSurfaces, launcherClosing);
@@ -2464,6 +2660,12 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
 
             result.setAnimation(anim, mLauncher, mOnEndCallback::executeAllAndDestroy,
                     skipFirstFrame);
+            if (continuePreview && anim.isStarted()) {
+                // Start at the preview's current time, rather than replaying from the icon.
+                anim.setCurrentPlayTime(Math.min(mPreview.elapsed(),
+                        Math.max(0, anim.getTotalDuration() - 1)));
+                mPreview.handOff();
+            }
             // If app launch animation is started and TaskbarAsyncAnimator is returned (meaning
             // taskbar stash animation will be played on taskbar's ui thread), launcher needs to
             // explicitly trigger taskbar stash animation from main thread.
