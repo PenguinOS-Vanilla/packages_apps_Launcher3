@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-     ColorOS-style "Search on Home screen" pill shown in the dock's search slot.
+     iOS-style "Search on Home screen" pill shown in the dock's search slot.
      Based on the PenguinOS Launcher3 search pill (SPDX-License-Identifier: Apache-2.0).
 -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -11,14 +11,15 @@
     android:background="@drawable/bg_home_search_pill"
     android:foreground="?android:attr/selectableItemBackgroundBorderless"
     android:drawableStart="@drawable/ic_home_search_pill"
-    android:drawablePadding="8dp"
-    android:drawableTint="@android:color/white"
+    android:drawablePadding="5dp"
+    android:drawableTint="@color/home_search_pill_content"
     android:gravity="center"
-    android:paddingStart="18dp"
-    android:paddingEnd="22dp"
+    android:includeFontPadding="false"
+    android:paddingStart="13dp"
+    android:paddingEnd="15dp"
     android:text="@string/home_search_pill"
     android:contentDescription="@string/home_search_pill"
-    android:textColor="@android:color/white"
-    android:textSize="15sp"
+    android:textColor="@color/home_search_pill_content"
+    android:textSize="14sp"
     android:singleLine="true"
-    android:fontFamily="@*android:string/config_bodyFontFamilyMedium" />
+    android:fontFamily="@*android:string/config_bodyFontFamily" />

@@ -79,6 +79,8 @@
     <color name="page_indicator_arrow_bg_dark">#FFFFFF</color>
 
     <color name="page_indicator_rounded_background_color">#1AD6EAB4</color>
+    <!-- Soft white of the iOS home Search pill text and glyph. -->
+    <color name="home_search_pill_content">#D9FFFFFF</color>
 
     <color name="text_color_primary_dark">#FFFFFFFF</color>
     <color name="text_color_secondary_dark">#FFFFFFFF</color>

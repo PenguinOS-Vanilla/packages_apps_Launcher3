@@ -109,6 +109,7 @@ public class PageIndicatorDots extends View implements Insettable, PageIndicator
                 public void setValue(PageIndicatorDots obj, int alpha) {
                     obj.mPaginationPaint.setAlpha(alpha);
                     obj.invalidate();
+                    obj.notifyRevealChanged();
                 }
             };
 
@@ -124,6 +125,7 @@ public class PageIndicatorDots extends View implements Insettable, PageIndicator
     private boolean mShouldAutoHide;
     private boolean mIsMoveAnimationQueued;
     private int mToAlpha;
+    private @Nullable Runnable mRevealListener;
 
     /**
      * The current position of the active dot including the animation progress.
@@ -231,6 +233,24 @@ public class PageIndicatorDots extends View implements Insettable, PageIndicator
         } else if (!shouldAutoHide) {
             mDelayedPaginationFadeHandler.removeCallbacksAndMessages(null);
         }
+        notifyRevealChanged();
+    }
+
+    /** Called whenever {@link #getReveal()} may have changed. */
+    public void setRevealListener(@Nullable Runnable listener) {
+        mRevealListener = listener;
+    }
+
+    /** How visible the dots are right now, from 0 (hidden) to 1 (shown). */
+    public float getReveal() {
+        if (mNumPages < 2) return 0f;
+        if (!mShouldAutoHide) return 1f;
+        if (mTotalScroll == 0) return 0f;
+        return mPaginationPaint.getAlpha() / (float) VISIBLE_ALPHA;
+    }
+
+    private void notifyRevealChanged() {
+        if (mRevealListener != null) mRevealListener.run();
     }
 
     @Override
@@ -402,6 +422,7 @@ public class PageIndicatorDots extends View implements Insettable, PageIndicator
         }
 
         requestLayout();
+        notifyRevealChanged();
     }
 
     @Override

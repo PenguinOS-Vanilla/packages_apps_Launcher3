@@ -27,6 +27,7 @@ public final class PenguinDockGlass extends Drawable {
     private int alpha = 255;
     private float flatProgress;
     private final boolean searchPanel;
+    private boolean capsule;
     public PenguinDockGlass(View owner) { this(owner, false); }
     public PenguinDockGlass(View owner, boolean searchPanel) {
         this.owner = owner;
@@ -35,7 +36,7 @@ public final class PenguinDockGlass extends Drawable {
     @Override public void draw(Canvas canvas) {
         if (getBounds().isEmpty()) return;
         float density = owner.getResources().getDisplayMetrics().density;
-        float radius = Math.min(28 * density, getBounds().height() * 0.4f);
+        float radius = radius(density);
         WindowManager wm = owner.getContext().getSystemService(WindowManager.class);
         boolean enabled = wm != null && wm.isCrossWindowBlurEnabled();
         float live = 1f - flatProgress;
@@ -68,6 +69,18 @@ public final class PenguinDockGlass extends Drawable {
         paint.setAlpha(colorAlpha(0x33FFFFFF, alpha));
         canvas.drawRoundRect(rect, radius, radius, paint);
     }
+    /** Rounds the short sides fully, as iOS draws its small home pills. */
+    public void setCapsule(boolean capsule) {
+        if (this.capsule == capsule) return;
+        this.capsule = capsule;
+        invalidateSelf();
+    }
+
+    private float radius(float density) {
+        return capsule ? getBounds().height() / 2f
+                : Math.min(28 * density, getBounds().height() * 0.4f);
+    }
+
     private static int colorAlpha(int color, int alpha) { return (color >>> 24) * alpha / 255; }
 
     /**
@@ -83,7 +96,7 @@ public final class PenguinDockGlass extends Drawable {
     }
     @Override public void getOutline(android.graphics.Outline outline) {
         float density = owner.getResources().getDisplayMetrics().density;
-        float radius = Math.min(28 * density, getBounds().height() * 0.4f);
+        float radius = radius(density);
         outline.setRoundRect(getBounds(), radius);
         outline.setAlpha(alpha / 255f);
     }

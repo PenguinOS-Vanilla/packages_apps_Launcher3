@@ -200,6 +200,7 @@ import com.android.launcher3.model.data.WorkspaceItemInfo;
 import com.android.launcher3.moments.MomentsController;
 import com.android.launcher3.moments.MomentsHomeView;
 import com.android.launcher3.outdoor.OutdoorController;
+import com.android.launcher3.pageindicators.PageIndicatorDotsWithArrows;
 import com.android.launcher3.pm.PinRequestHelper;
 import com.android.launcher3.popup.PopupContainer;
 import com.android.launcher3.popup.PopupController;
@@ -1053,7 +1054,7 @@ public class Launcher extends StatefulActivity<LauncherState>
         }
         // When multiple pages are visible or desktop devices, show persistent page indicator
         mWorkspace.getPageIndicator().setShouldAutoHide(!state.hasFlag(FLAG_MULTI_PAGE)
-                && !shouldEnableMouseInteractionChanges(mWorkspace.getContext()));
+                && !keepsPageIndicatorShown());
 
         mPrevLauncherState = mStateManager.getCurrentStableState();
         if (mPrevLauncherState != state && ALL_APPS.equals(state)
@@ -1251,8 +1252,7 @@ public class Launcher extends StatefulActivity<LauncherState>
         mDropTargetBar.setup(mDragController);
         mAllAppsController.setupViews(mScrimView, mAppsView);
 
-        mWorkspace.getPageIndicator().setShouldAutoHide(
-                !shouldEnableMouseInteractionChanges(mWorkspace.getContext()));
+        mWorkspace.getPageIndicator().setShouldAutoHide(!keepsPageIndicatorShown());
         mWorkspace.getPageIndicator().setPaintColor(Themes.getAttrBoolean(
                 this, R.attr.isWorkspaceDarkText) ? Color.BLACK : Color.WHITE);
 
@@ -1539,6 +1539,16 @@ public class Launcher extends StatefulActivity<LauncherState>
      * Island on, the field drops out of the island at the top; without it, the field grows out of
      * the pill in place, above the dock.
      */
+    /**
+     * With a mouse the page dots normally stay shown; sharing the Search pill's spot they still
+     * hide once pages settle, so the Search pill comes back.
+     */
+    private boolean keepsPageIndicatorShown() {
+        return shouldEnableMouseInteractionChanges(mWorkspace.getContext())
+                && !(mWorkspace.getPageIndicator() instanceof PageIndicatorDotsWithArrows dots
+                        && dots.isSearchPillMode());
+    }
+
     public void openSearchFromPill(View pill) {
         boolean island = Settings.System.getInt(getContentResolver(),
                 "status_bar_show_dynamic_island", 0) != 0;

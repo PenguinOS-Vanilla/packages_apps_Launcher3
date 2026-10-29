@@ -657,7 +657,9 @@
     <dimen name="burn_in_protection_vertical_shift">6dp</dimen>
 
     <!-- The Search pill above the dock, as iOS shows between the home screen and the dock. -->
-    <dimen name="home_search_pill_height">30dp</dimen>
+    <dimen name="home_search_pill_height">28dp</dimen>
+    <!-- Room either side of the page dots when they show on the Search pill's glass. -->
+    <dimen name="home_search_pill_dots_padding">10dp</dimen>
     <dimen name="home_search_pill_gap">14dp</dimen>
 
     <!-- Spotlight, opened from the Search pill. -->

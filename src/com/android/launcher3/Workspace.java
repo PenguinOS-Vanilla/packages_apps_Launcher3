@@ -475,6 +475,11 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     }
 
     private void setPageIndicatorInset() {
+        // Sharing the Search pill's spot, the dots stay centred on it.
+        if (mPageIndicator instanceof PageIndicatorDotsWithArrows dots
+                && dots.applySearchPillLayout()) {
+            return;
+        }
         DeviceProfile grid = mLauncher.getDeviceProfile();
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mPageIndicator.getLayoutParams();
         // Set insets for page indicator

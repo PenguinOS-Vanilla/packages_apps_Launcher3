@@ -45,6 +45,7 @@ import com.android.launcher3.dragndrop.SystemDragItemInfo;
 import com.android.launcher3.homescreenfiles.HomeScreenFilesUtilsKt;
 import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.model.data.LauncherAppWidgetInfo;
+import com.android.launcher3.pageindicators.PageIndicatorDotsWithArrows;
 import com.android.launcher3.util.HorizontalInsettableView;
 import com.android.launcher3.util.LauncherBindableItemsContainer.ItemOperator;
 import com.android.launcher3.util.MultiPropertyFactory;
@@ -69,11 +70,14 @@ public class Hotseat extends CellLayout implements Insettable {
     public static final int ALPHA_CHANNEL_PREVIEW_RENDERER = 1;
     public static final int ALPHA_CHANNEL_TASKBAR_STASH = 2;
     public static final int ALPHA_CHANNEL_ASSISTANT_VISIBILITY = 3;
-    public static final int ALPHA_CHANNEL_CHANNELS_COUNT = 4;
+    /** The Search pill gives way to the page dots while pages scroll. */
+    public static final int ALPHA_CHANNEL_PAGE_DOTS = 4;
+    public static final int ALPHA_CHANNEL_CHANNELS_COUNT = 5;
 
     @Retention(RetentionPolicy.RUNTIME)
     @IntDef({ALPHA_CHANNEL_TASKBAR_ALIGNMENT, ALPHA_CHANNEL_PREVIEW_RENDERER,
-            ALPHA_CHANNEL_TASKBAR_STASH, ALPHA_CHANNEL_ASSISTANT_VISIBILITY})
+            ALPHA_CHANNEL_TASKBAR_STASH, ALPHA_CHANNEL_ASSISTANT_VISIBILITY,
+            ALPHA_CHANNEL_PAGE_DOTS})
     public @interface HotseatQsbAlphaId {
     }
 
@@ -109,6 +113,10 @@ public class Hotseat extends CellLayout implements Insettable {
     private int mDockSlot;
     private final PenguinDockGlass mDockGlass = new PenguinDockGlass(this);
     private PenguinDockGlass mSearchPillGlass;
+    /** Glass of the large-screen Search pill that stands in the QSB slot; null otherwise. */
+    private @Nullable PenguinDockGlass mQsbPillGlass;
+    /** The Search pill's centre as a distance from the bottom of the home screen; -1 if none. */
+    private int mSearchPillCentreFromBottom = -1;
     private int mDockBlurMargin;
     /** Whether the dock lays out at its natural width (PenguinDockMetrics.usesNaturalDock). */
     private boolean mNaturalDock;
@@ -140,6 +148,7 @@ public class Hotseat extends CellLayout implements Insettable {
     public void setDockContentBlur(float progress) {
         mDockGlass.setFlatProgress(progress);
         if (mSearchPillGlass != null) mSearchPillGlass.setFlatProgress(progress);
+        if (mQsbPillGlass != null) mQsbPillGlass.setFlatProgress(progress);
     }
 
     public void setDockCompanionSlotCount(int count) {
@@ -194,6 +203,9 @@ public class Hotseat extends CellLayout implements Insettable {
         if (Flags.enableQsbOnHotseat()) {
             if (mActivity.getDeviceProfile().getDeviceProperties().isLargeScreen()) {
                 mQsb = LayoutInflater.from(context).inflate(R.layout.home_search_pill, this, false);
+                mQsbPillGlass = new PenguinDockGlass(mQsb);
+                mQsbPillGlass.setCapsule(true);
+                mQsb.setBackground(mQsbPillGlass);
                 mQsb.setOnClickListener(v -> {
                     if (mActivity instanceof Launcher launcher) launcher.openSearchFromPill(v);
                 });
@@ -214,6 +226,7 @@ public class Hotseat extends CellLayout implements Insettable {
 
         mSearchPill = LayoutInflater.from(context).inflate(R.layout.home_search_pill, this, false);
         mSearchPillGlass = new PenguinDockGlass(mSearchPill);
+        mSearchPillGlass.setCapsule(true);
         mSearchPill.setBackground(mSearchPillGlass);
         mSearchPill.setOnClickListener(v -> {
             if (mActivity instanceof Launcher launcher) launcher.openSearchFromPill(v);
@@ -371,9 +384,9 @@ public class Hotseat extends CellLayout implements Insettable {
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) getLayoutParams();
         DeviceProfile grid = mActivity.getDeviceProfile();
 
-        // The Search pill belongs to the iPad dock; phones keep the stock hotseat search bar.
+        // The Search pill sits above the dock on every screen size and shares its spot with the
+        // page dots, which show in its place only while pages scroll.
         mSearchPill.setVisibility(grid.isVerticalBarLayout()
-                || !grid.getDeviceProperties().isLargeScreen()
                 || grid.getDeviceProperties().getTaskbarConfiguration().isTaskbarPresent()
                 || !LauncherPrefs.isUniversalSearchOnHome(getContext())
                 ? View.GONE : View.VISIBLE);
@@ -419,12 +432,70 @@ public class Hotseat extends CellLayout implements Insettable {
         setPadding(padding.left, padding.top + pillSpace + mDockBlurMargin, padding.right,
                 padding.bottom);
         setLayoutParams(lp);
+        if (getActiveSearchPill() == null) {
+            mSearchPillCentreFromBottom = -1;
+            bindPageIndicatorToSearchPill();
+        }
         InsettableFrameLayout.dispatchInsets(this, insets);
     }
 
     public void setWorkspace(Workspace<?> w) {
         mWorkspace = w;
         setCellLayoutContainer(w);
+        bindPageIndicatorToSearchPill();
+    }
+
+    /** Lets the page dots take the Search pill's place while pages scroll. */
+    private void bindPageIndicatorToSearchPill() {
+        if (mWorkspace == null
+                || !(mWorkspace.getPageIndicator() instanceof PageIndicatorDotsWithArrows dots)) {
+            return;
+        }
+        if (mSearchPillCentreFromBottom < 0) {
+            dots.setSearchPill(-1, null);
+            setSearchPillReveal(0f);
+        } else {
+            dots.setSearchPill(mSearchPillCentreFromBottom, reveal -> {
+                setSearchPillReveal(reveal);
+                return kotlin.Unit.INSTANCE;
+            });
+        }
+    }
+
+    /** The Search pill shown above the dock, if any: the dock's own or the one in the QSB slot. */
+    private @Nullable View getActiveSearchPill() {
+        if (mSearchPill.getVisibility() == View.VISIBLE) return mSearchPill;
+        if (mQsbPillGlass != null && mQsb.getVisibility() == View.VISIBLE) return mQsb;
+        return null;
+    }
+
+    /** Keeps the page dots centred on the Search pill once it is laid out. */
+    private void updateSearchPillCentre() {
+        View pill = getActiveSearchPill();
+        int centre = -1;
+        if (pill != null && getParent() instanceof View parent) {
+            centre = parent.getHeight() - (getTop() + (pill.getTop() + pill.getBottom()) / 2);
+        }
+        if (centre != mSearchPillCentreFromBottom) {
+            mSearchPillCentreFromBottom = centre;
+            // Moving the dots relayouts the parent, so wait for this layout pass to finish.
+            post(this::bindPageIndicatorToSearchPill);
+        }
+    }
+
+    /** Fades the Search pill out as far as the page dots are shown in its place. */
+    private void setSearchPillReveal(float dotsReveal) {
+        float shown = 1f - dotsReveal;
+        float scale = 0.9f + 0.1f * shown;
+        mSearchPill.setAlpha(shown);
+        mSearchPill.setScaleX(scale);
+        mSearchPill.setScaleY(scale);
+        mSearchPill.setClickable(shown > 0.5f);
+        if (mQsbPillGlass != null) {
+            mQsbAlphaChannels.get(ALPHA_CHANNEL_PAGE_DOTS).setValue(shown);
+            mQsb.setScaleX(scale);
+            mQsb.setScaleY(scale);
+        }
     }
 
     @Override
@@ -510,8 +581,8 @@ public class Hotseat extends CellLayout implements Insettable {
 
         if (mQsb != null && mQsb.getVisibility() != View.GONE) {
             DeviceProfile dp = mActivity.getDeviceProfile();
-            if (dp.getDeviceProperties().isLargeScreen() && mDockCompanion != null
-                    && mNaturalDock) {
+            if (mQsbPillGlass != null || (dp.getDeviceProperties().isLargeScreen()
+                    && mDockCompanion != null && mNaturalDock)) {
                 mQsb.measure(makeMeasureSpec(dp.getDeviceProperties().getAvailableWidthPx(),
                                 MeasureSpec.AT_MOST),
                         makeMeasureSpec(getResources().getDimensionPixelSize(
@@ -526,6 +597,11 @@ public class Hotseat extends CellLayout implements Insettable {
 
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        layoutDock(changed, l, t, r, b);
+        updateSearchPillCentre();
+    }
+
+    private void layoutDock(boolean changed, int l, int t, int r, int b) {
         super.onLayout(changed, l, t, r, b);
         if (mDockBlurMargin > 0) {
             // Scale about the same centre as before the blur margin was added above.

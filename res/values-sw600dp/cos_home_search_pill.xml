@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <dimen name="home_search_pill_height">40dp</dimen>
+    <dimen name="home_search_pill_height">32dp</dimen>
     <dimen name="home_search_pill_gap">14dp</dimen>
-    <dimen name="home_search_pill_min_width">220dp</dimen>
+    <dimen name="home_search_pill_min_width">0dp</dimen>
 </resources>
